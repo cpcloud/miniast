@@ -202,22 +202,23 @@ class SourceVisitor(ast.NodeVisitor):
 
         bases = list(map(self.visit, node.bases))
         keywords = node.keywords
-        string = f'class {node.name}'
+        buf = [f'class {node.name}']
 
         if bases:
-            string += f"({', '.join(bases)}"
+            buf.append(f"({', '.join(bases)}")
 
         if keywords:
             kwargs = ', '.join(
                 f'{k.arg}={self.visit(k.value)}' for k in keywords
             )
-            string += f", {kwargs}"
+            buf.append(f", {kwargs}")
 
         if bases or keywords:
-            string += ')'
+            buf.append(')')
 
         body = textwrap.indent('\n'.join(map(self.visit, node.body)), ' ' * 4)
-        return string + f':{body}'
+        buf.append(f':{body}')
+        return ''.join(buf)
 
 
 def sourcify(mod):
