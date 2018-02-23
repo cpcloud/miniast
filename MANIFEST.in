@@ -1,0 +1,2 @@
+include versioneer.py
+include miniast/_version.py
