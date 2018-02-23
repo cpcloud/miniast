@@ -372,6 +372,8 @@ return_ = Return()
 
 
 class ClassDefinition:
+    __slots__ = 'name', 'bases', 'keywords',
+
     def __init__(self, name, *bases, **keywords):
         self.name = name
         self.bases = bases
