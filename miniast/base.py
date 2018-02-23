@@ -132,7 +132,7 @@ def to_node(value):
 
 
 def to_expr(value):
-    return value if isinstance(value, ast.stmt) else expr(value)
+    return value if isinstance(value, ast.stmt) else ast.Expr(value=value)
 
 
 class Call:
@@ -229,7 +229,7 @@ class FunctionDeclaration:
 def_ = FunctionDeclaration()
 
 
-class FunctionArguments:
+class FunctionSignature:
 
     __slots__ = 'name', 'arguments'
 
@@ -261,10 +261,6 @@ def mod(*body):
     )
 
 
-def expr(value):
-    return ast.Expr(value=value)
-
-
 class FunctionDef:
     __slots__ = 'name',
 
@@ -272,7 +268,7 @@ class FunctionDef:
         self.name = name
 
     def __call__(self, *ast_arguments):
-        return FunctionArguments(
+        return FunctionSignature(
             self.name,
             ast.arguments(
                 args=list(ast_arguments),
@@ -386,7 +382,7 @@ class ClassDefinition:
             name=self.name,
             bases=list(self.bases),
             keywords=[
-                ast.keyword(arg=arg, value=value)
+                ast.keyword(arg=arg, value=to_node(value))
                 for arg, value in self.keywords.items()
             ],
             body=list(body),
