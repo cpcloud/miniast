@@ -2,7 +2,7 @@ import ast
 
 import pytest
 
-from slumba.miniast import (
+from miniast import (
     load,
     store,
     arg,
@@ -21,7 +21,7 @@ from slumba.miniast import (
     if_,
 )
 
-from slumba.source import sourcify
+from miniast import sourcify
 
 
 def eq(a, b):
