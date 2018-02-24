@@ -199,8 +199,8 @@ def test_complex_class():
         ],
         def_.step(arg.self, arg.value)[
             if_(load.value.is_not(NONE))[
-                store.self.value.assign(load.self.value + load.value),
-                store.self.count.assign(load.self.count + 1)
+                store.self.value.iadd(load.value),
+                store.self.count.iadd(1)
             ]
         ],
         def_.finalize(arg.self)[
@@ -217,8 +217,8 @@ class Average:
 
     def step(self, value):
         if value is not None:
-            self.value = self.value + value
-            self.count = self.count + 1
+            self.value += value
+            self.count += 1
 
     def finalize(self):
         if self.count:

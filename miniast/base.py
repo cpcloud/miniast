@@ -8,6 +8,11 @@ import copy
 import functools
 
 
+class StatementWithBody:
+    def __getitem__(self, *body):
+        return self(*to_list(*body))
+
+
 def binary_operations(mapping, func):
     def decorator(cls):
         for method_name, op in mapping.items():
@@ -52,6 +57,19 @@ class Comparable:
 
     func=lambda self, other, op: ast.BinOp(
         left=self, op=op, right=to_node(other))
+)
+@binary_operations(
+    {
+        'iadd': ast.Add,
+        'isub': ast.Sub,
+        'imul': ast.Mult,
+        'ifloordiv': ast.FloorDiv,
+        'idiv': ast.Div,
+        'ipow': ast.Pow,
+    },
+    func=lambda self, other, op: ast.AugAssign(
+        target=self, op=op, value=to_node(other)
+    )
 )
 class BinOp:
     pass
@@ -200,13 +218,13 @@ class Attribute(ast.Attribute, Assignable, Indexable, Comparable, BinOp):
         return call(self, *args, **kwargs)
 
 
-class Else:
+class Else(StatementWithBody):
     __slots__ = 'ifstmt',
 
     def __init__(self, ifstmt):
         self.ifstmt = ifstmt
 
-    def __getitem__(self, orelse):
+    def __call__(self, *orelse):
         ifstmt = self.ifstmt
         return type(ifstmt)(
             ifstmt.test, ifstmt.body, list(map(to_expr, to_list(orelse))))
@@ -221,13 +239,13 @@ class If(ast.If):
         return Else(self)
 
 
-class IfCond:
+class IfCond(StatementWithBody):
     __slots__ = 'test',
 
     def __init__(self, test):
         self.test = test
 
-    def __getitem__(self, body):
+    def __call__(self, *body):
         return If(test=self.test, body=list(map(to_expr, to_list(body))))
 
 
@@ -257,7 +275,7 @@ class For:
         return TargetedFor(target)
 
 
-class IteratedFor:
+class IteratedFor(StatementWithBody):
 
     __slots__ = 'target', 'iter',
 
@@ -265,7 +283,7 @@ class IteratedFor:
         self.target = target
         self.iter = iter
 
-    def __getitem__(self, body):
+    def __call__(self, *body):
         return ast.For(target=self.target, iter=self.iter, body=to_list(body))
 
 
@@ -282,14 +300,14 @@ class TargetedFor:
 for_ = For()
 
 
-class WhileBody:
+class WhileBody(StatementWithBody):
 
     __slots__ = 'test',
 
     def __init__(self, test):
         self.test = test
 
-    def __getitem__(self, body):
+    def __call__(self, *body):
         return ast.While(test=self.test, body=to_list(body))
 
 
@@ -325,7 +343,7 @@ class FunctionDeclaration:
 def_ = FunctionDeclaration()
 
 
-class FunctionSignature:
+class FunctionSignature(StatementWithBody):
 
     __slots__ = 'name', 'arguments'
 
@@ -333,7 +351,7 @@ class FunctionSignature:
         self.name = name
         self.arguments = arguments
 
-    def __getitem__(self, body):
+    def __call__(self, *body):
         return ast.FunctionDef(
             name=self.name,
             args=self.arguments,
@@ -475,7 +493,7 @@ def to_list(key):
 class ClassConstructible:
     __slots__ = ()
 
-    def __getitem__(self, body):
+    def __call__(self, *body):
         return ast.ClassDef(
             name=self.name,
             bases=list(self.bases),
@@ -496,17 +514,23 @@ class ClassWithArguments(ClassConstructible):
         self.bases = bases
         self.keywords = keywords
 
+    def __getitem__(self, body):
+        return super().__call__(*to_list(body))
+
 
 class ClassDefinition(ClassConstructible):
     __slots__ = 'name', 'bases', 'keywords'
 
     def __init__(self, name):
         self.name = name
-        self.bases = ()
+        self.bases = []
         self.keywords = {}
 
     def __call__(self, *bases, **keywords):
         return ClassWithArguments(self.name, *bases, **keywords)
+
+    def __getitem__(self, body):
+        return super().__call__(*to_list(body))
 
 
 class ClassDeclaration:

@@ -42,6 +42,12 @@ class SourceVisitor(ast.NodeVisitor):
     def visit_Pow(self, node):
         return '**'
 
+    def visit_AugAssign(self, node):
+        target = node.target
+        op = node.op
+        value = node.value
+        return f'{self.visit(target)} {self.visit(op)}= {self.visit(value)}'
+
     def visit_If(self, node):
         test = self.visit(node.test)
         spaces = ' ' * 4
