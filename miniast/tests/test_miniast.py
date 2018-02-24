@@ -7,8 +7,7 @@ from miniast import (
     store,
     arg,
     call,
-    attr,
-    getidx,
+    idx,
     sub,
     alias,
     import_from,
@@ -19,6 +18,11 @@ from miniast import (
     def_,
     return_,
     if_,
+    while_,
+    for_,
+    pass_,
+    Attribute,
+    Name
 )
 
 from miniast import sourcify
@@ -93,9 +97,9 @@ def test_call():
 
 def test_attr():
     assert eq(
-        attr.foo.get_a_thing,
-        ast.Attribute(
-            value=ast.Name(id='foo', ctx=ast.Load()),
+        load.foo.get_a_thing,
+        Attribute(
+            value=Name(id='foo', ctx=ast.Load()),
             attr='get_a_thing',
             ctx=ast.Load(),
         )
@@ -104,13 +108,13 @@ def test_attr():
 
 @pytest.mark.parametrize('i', range(5))
 def test_idx(i):
-    assert eq(getidx(i), ast.Index(value=ast.Num(n=i)))
+    assert eq(idx(i), ast.Index(value=ast.Num(n=i)))
 
 
 @pytest.mark.parametrize('i', range(5))
 def test_sub(i):
     assert eq(
-        sub(load.a, getidx(i)),
+        sub(load.a, idx(i)),
         ast.Subscript(
             value=ast.Name(id='a', ctx=ast.Load()),
             slice=ast.Index(value=ast.Num(n=i)),
@@ -154,8 +158,34 @@ def test_classdef():
 
     myklass = class_.Yuge(load.object, metaclass=load.object)(
         def_.method1(arg.self, arg.a)(
-            if_(load.a == 1, return_(load.a + 1), return_(1))
+            if_(load.a == 1)(return_(load.a + 1)).else_(return_(1))
         )
     )
     s = sourcify(myklass)
-    assert s
+    assert s == """\
+class Yuge(object, metaclass=object):
+    def method1(self, a):
+        if a == 1:
+            return a + 1
+        else:
+            return 1"""
+
+
+def test_while():
+    loop = while_(load.x < load.y)(
+        pass_
+    )
+    assert sourcify(loop) == """\
+while x < y:
+    pass"""
+    assert loop is not None
+
+
+def test_for():
+    loop = for_(load.x).in_(load.y)(
+        call.print(1)
+    )
+    assert sourcify(loop) == """\
+for x in y:
+    print(1)"""
+    assert loop is not None
