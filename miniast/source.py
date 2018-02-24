@@ -168,8 +168,6 @@ class SourceVisitor(ast.NodeVisitor):
     def visit_Name(self, node):
         return node.id
 
-    visit_Variable = visit_Name
-
     def visit_Num(self, node):
         return str(node.n)
 
@@ -178,6 +176,9 @@ class SourceVisitor(ast.NodeVisitor):
 
     def visit_arg(self, node):
         return node.arg
+
+    def visit_Pass(self, node):
+        return 'pass'
 
     def visit_Raise(self, node):
         raise_string = f'raise {self.visit(node.exc)}'
@@ -219,6 +220,16 @@ class SourceVisitor(ast.NodeVisitor):
         body = textwrap.indent('\n'.join(map(self.visit, node.body)), ' ' * 4)
         buf.append(f':{body}')
         return ''.join(buf)
+
+    def visit_While(self, node):
+        body = textwrap.indent('\n'.join(map(self.visit, node.body)), ' ' * 4)
+        return f'while {self.visit(node.test)}:\n{body}'
+
+    def visit_For(self, node):
+        target = self.visit(node.target)
+        iter = self.visit(node.iter)
+        body = textwrap.indent('\n'.join(map(self.visit, node.body)), ' ' * 4)
+        return f'for {target} in {iter}:\n{body}'
 
 
 def sourcify(mod):
