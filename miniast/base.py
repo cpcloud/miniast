@@ -3,6 +3,7 @@ Constructing Python ASTs in Python is quite verbose, let's clean it up a bit.
 """
 
 import ast
+import collections
 import copy
 import functools
 
@@ -182,7 +183,7 @@ class Call:
 call = Call()
 
 
-class Attribute(ast.Attribute, Assignable, Indexable):
+class Attribute(ast.Attribute, Assignable, Indexable, Comparable, BinOp):
 
     def __init__(self, value, attr, ctx, lineno=0, col_offset=0):
         super().__init__(
@@ -199,15 +200,25 @@ class Attribute(ast.Attribute, Assignable, Indexable):
         return call(self, *args, **kwargs)
 
 
+class Else:
+    __slots__ = 'ifstmt',
+
+    def __init__(self, ifstmt):
+        self.ifstmt = ifstmt
+
+    def __getitem__(self, orelse):
+        ifstmt = self.ifstmt
+        return type(ifstmt)(
+            ifstmt.test, ifstmt.body, list(map(to_expr, to_list(orelse))))
+
+
 class If(ast.If):
     def __init__(self, test, body, orelse=None):
-        super().__init__(
-            test=test, body=body, orelse=orelse or [])
+        super().__init__(test=test, body=body, orelse=orelse or [])
 
-    def else_(self, orelse):
-        if orelse is not None and not isinstance(orelse, list):
-            orelse = [orelse]
-        return type(self)(self.test, self.body, list(map(to_expr, orelse)))
+    @property
+    def else_(self):
+        return Else(self)
 
 
 class IfCond:
@@ -216,8 +227,8 @@ class IfCond:
     def __init__(self, test):
         self.test = test
 
-    def __call__(self, *body):
-        return If(test=self.test, body=list(map(to_expr, body)))
+    def __getitem__(self, body):
+        return If(test=self.test, body=list(map(to_expr, to_list(body))))
 
 
 class IfStatement:
@@ -254,8 +265,8 @@ class IteratedFor:
         self.target = target
         self.iter = iter
 
-    def __call__(self, *body):
-        return ast.For(target=self.target, iter=self.iter, body=list(body))
+    def __getitem__(self, body):
+        return ast.For(target=self.target, iter=self.iter, body=to_list(body))
 
 
 class TargetedFor:
@@ -271,11 +282,22 @@ class TargetedFor:
 for_ = For()
 
 
+class WhileBody:
+
+    __slots__ = 'test',
+
+    def __init__(self, test):
+        self.test = test
+
+    def __getitem__(self, body):
+        return ast.While(test=self.test, body=to_list(body))
+
+
 class While:
     __slots__ = ()
 
     def __call__(self, test):
-        return lambda *body: ast.While(test=test, body=list(body))
+        return WhileBody(test)
 
 
 while_ = While()
@@ -311,27 +333,14 @@ class FunctionSignature:
         self.name = name
         self.arguments = arguments
 
-    def __call__(self, *body, returns=None):
+    def __getitem__(self, body):
         return ast.FunctionDef(
             name=self.name,
             args=self.arguments,
-            body=list(body),
+            body=to_list(body),
             decorator_list=[],
-            returns=returns
+            returns=None
         )
-
-
-def decorate(*functions):
-    def wrapper(function_definition):
-        func_def = copy.copy(function_definition)
-        func_def.decorator_list = list(functions)
-        return func_def
-    return wrapper
-
-
-def mod(*lines):
-    module = ast.Module(body=list(lines))
-    return module
 
 
 class FunctionDef:
@@ -352,6 +361,19 @@ class FunctionDef:
                 defaults=[],
             )
         )
+
+
+def decorate(*functions):
+    def wrapper(function_definition):
+        func_def = copy.copy(function_definition)
+        func_def.decorator_list = list(functions)
+        return func_def
+    return wrapper
+
+
+def mod(*lines):
+    module = ast.Module(body=list(lines))
+    return module
 
 
 class Index:
@@ -444,15 +466,16 @@ class Return:
 return_ = Return()
 
 
-class ClassDefinition:
-    __slots__ = 'name', 'bases', 'keywords',
+def to_list(key):
+    if isinstance(key, collections.Iterable) and not isinstance(key, str):
+        return list(key)
+    return [key]
 
-    def __init__(self, name, *bases, **keywords):
-        self.name = name
-        self.bases = bases
-        self.keywords = keywords
 
-    def __call__(self, *body):
+class ClassConstructible:
+    __slots__ = ()
+
+    def __getitem__(self, body):
         return ast.ClassDef(
             name=self.name,
             bases=list(self.bases),
@@ -460,16 +483,37 @@ class ClassDefinition:
                 ast.keyword(arg=arg, value=to_node(value))
                 for arg, value in self.keywords.items()
             ],
-            body=list(body),
+            body=to_list(body),
             decorator_list=[]
         )
+
+
+class ClassWithArguments(ClassConstructible):
+    __slots__ = 'name', 'bases', 'keywords'
+
+    def __init__(self, name, *bases, **keywords):
+        self.name = name
+        self.bases = bases
+        self.keywords = keywords
+
+
+class ClassDefinition(ClassConstructible):
+    __slots__ = 'name', 'bases', 'keywords'
+
+    def __init__(self, name):
+        self.name = name
+        self.bases = ()
+        self.keywords = {}
+
+    def __call__(self, *bases, **keywords):
+        return ClassWithArguments(self.name, *bases, **keywords)
 
 
 class ClassDeclaration:
     __slots__ = ()
 
     def __getitem__(self, name):
-        return functools.partial(ClassDefinition, name)
+        return ClassDefinition(name)
 
     __getattr__ = __getitem__
 

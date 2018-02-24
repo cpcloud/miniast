@@ -156,11 +156,11 @@ def test_constants():
 
 def test_classdef():
 
-    myklass = class_.Yuge(load.object, metaclass=load.object)(
-        def_.method1(arg.self, arg.a)(
-            if_(load.a == 1)(return_(load.a + 1)).else_(return_(1))
-        )
-    )
+    myklass = class_.Yuge(load.object, metaclass=load.object)[
+        def_.method1(arg.self, arg.a)[
+            if_(load.a == 1)[return_(load.a + 1)].else_[return_(1)]
+        ]
+    ]
     s = sourcify(myklass)
     assert s == """\
 class Yuge(object, metaclass=object):
@@ -172,9 +172,9 @@ class Yuge(object, metaclass=object):
 
 
 def test_while():
-    loop = while_(load.x < load.y)(
+    loop = while_(load.x < load.y)[
         pass_
-    )
+    ]
     assert sourcify(loop) == """\
 while x < y:
     pass"""
@@ -182,10 +182,44 @@ while x < y:
 
 
 def test_for():
-    loop = for_(load.x).in_(load.y)(
+    loop = for_(load.x).in_(load.y)[
         call.print(1)
-    )
+    ]
     assert sourcify(loop) == """\
 for x in y:
     print(1)"""
     assert loop is not None
+
+
+def test_complex_class():
+    klass = class_.Average[
+        def_['__init__'](arg.self)[
+            store.self.value.assign(0.0),
+            store.self.count.assign(0),
+        ],
+        def_.step(arg.self, arg.value)[
+            if_(load.value.is_not(NONE))[
+                store.self.value.assign(load.self.value + load.value),
+                store.self.count.assign(load.self.count + 1)
+            ]
+        ],
+        def_.finalize(arg.self)[
+            if_(load.self.count)[
+                return_(load.self.value / load.self.count)
+            ]
+        ]
+    ]
+    assert sourcify(klass) == """\
+class Average:
+    def __init__(self):
+        self.value = 0.0
+        self.count = 0
+
+    def step(self, value):
+        if value is not None:
+            self.value = self.value + value
+            self.count = self.count + 1
+
+    def finalize(self):
+        if self.count:
+            return self.value / self.count"""
