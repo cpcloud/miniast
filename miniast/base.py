@@ -60,15 +60,34 @@ def s(value):
     return ast.Str(s=value)
 
 
-class Variable(ast.Name, Comparable, BinOp):
-    def __init__(self, id, ctx):
-        super().__init__(id=id, ctx=ctx)
+class Assign(ast.Assign):
+    def __init__(self, targets, value):
+        super().__init__(targets=targets, value=value)
 
-    def __getitem__(self, key):
-        return sub(self, getidx(key))
 
+class Assignable:
     def assign(self, value):
-        return ast.Assign(targets=[self], value=to_node(value))
+        fields = {field: getattr(self, field) for field in self._fields}
+        fields['ctx'] = ast.Store()
+        return Assign(targets=[type(self)(**fields)], value=to_node(value))
+
+
+class Indexable:
+    def __getitem__(self, key):
+        return sub(self, idx(key))
+
+
+class Name(ast.Name, Comparable, BinOp, Assignable, Indexable):
+    def __init__(self, id, ctx, lineno=0, col_offset=0):
+        super().__init__(id=id, ctx=ctx, lineno=lineno, col_offset=col_offset)
+
+    def __getattr__(self, name):
+        return Attribute(
+            value=self,
+            attr=name,
+            ctx=type(self.ctx)(),
+            lineno=self.lineno,
+            col_offset=self.col_offset)
 
 
 class Load(Comparable):
@@ -80,7 +99,7 @@ class Load(Comparable):
     __slots__ = ()
 
     def __getitem__(self, key):
-        return Variable(id=key, ctx=ast.Load())
+        return Name(id=key, ctx=ast.Load())
 
     __getattr__ = __getitem__
 
@@ -102,7 +121,7 @@ class Store:
     __slots__ = ()
 
     def __getitem__(self, key):
-        return Variable(id=key, ctx=ast.Store())
+        return Name(id=key, ctx=ast.Store())
 
     __getattr__ = __getitem__
 
@@ -127,7 +146,8 @@ def to_node(value):
         return ast.Str(s=value)
     elif isinstance(value, (int, float)):
         return ast.Num(n=value)
-    assert value is None or isinstance(value, ast.AST)
+    assert value is None or isinstance(value, ast.AST), \
+        f'value must be None or AST instance, got {type(value).__name__}'
     return value
 
 
@@ -162,49 +182,103 @@ class Call:
 call = Call()
 
 
-class Attributable:
-    __slots__ = 'parent',
+class Attribute(ast.Attribute, Assignable, Indexable):
 
-    def __init__(self, parent):
-        self.parent = parent
+    def __init__(self, value, attr, ctx, lineno=0, col_offset=0):
+        super().__init__(
+            value=value,
+            attr=attr,
+            ctx=ctx,
+            lineno=lineno,
+            col_offset=col_offset)
 
     def __getattr__(self, name):
-        return ast.Attribute(value=self.parent, attr=name, ctx=ast.Load())
+        return type(self)(value=self, attr=name, ctx=type(self.ctx)())
+
+    def __call__(self, *args, **kwargs):
+        return call(self, *args, **kwargs)
 
 
-class Attr:
-    __slots__ = ()
+class If(ast.If):
+    def __init__(self, test, body, orelse=None):
+        super().__init__(
+            test=test, body=body, orelse=orelse or [])
 
-    def __getitem__(self, key):
-        return Attributable(load[key])
-
-    __getattr__ = __getitem__
-
-
-attr = Attr()
-
-
-class If:
-    __slots__ = ()
-
-    def __call__(self, test, body, orelse=None):
-        if not isinstance(body, list):
-            body = [body]
-
-        if orelse is None:
-            orelse = []
-
+    def else_(self, orelse):
         if orelse is not None and not isinstance(orelse, list):
             orelse = [orelse]
-
-        return ast.If(
-            test=test,
-            body=list(map(to_expr, body)),
-            orelse=list(map(to_expr, orelse))
-        )
+        return type(self)(self.test, self.body, list(map(to_expr, orelse)))
 
 
-if_ = If()
+class IfCond:
+    __slots__ = 'test',
+
+    def __init__(self, test):
+        self.test = test
+
+    def __call__(self, *body):
+        return If(test=self.test, body=list(map(to_expr, body)))
+
+
+class IfStatement:
+    """
+    if_(cond)(
+    ).else_(
+    )
+    """
+    __slots__ = ()
+
+    def __call__(self, test):
+        return IfCond(test)
+
+
+if_ = IfStatement()
+
+
+class For:
+    """
+    for_(target).in_(iter)(
+    )
+    """
+    __slots__ = ()
+
+    def __call__(self, target):
+        return TargetedFor(target)
+
+
+class IteratedFor:
+
+    __slots__ = 'target', 'iter',
+
+    def __init__(self, target, iter):
+        self.target = target
+        self.iter = iter
+
+    def __call__(self, *body):
+        return ast.For(target=self.target, iter=self.iter, body=list(body))
+
+
+class TargetedFor:
+    __slots__ = 'target',
+
+    def __init__(self, target):
+        self.target = target
+
+    def in_(self, iter):
+        return IteratedFor(self.target, iter)
+
+
+for_ = For()
+
+
+class While:
+    __slots__ = ()
+
+    def __call__(self, test):
+        return lambda *body: ast.While(test=test, body=list(body))
+
+
+while_ = While()
 
 
 class IfElse:
@@ -255,10 +329,9 @@ def decorate(*functions):
     return wrapper
 
 
-def mod(*body):
-    return ast.Module(
-        body=list(body)
-    )
+def mod(*lines):
+    module = ast.Module(body=list(lines))
+    return module
 
 
 class FunctionDef:
@@ -267,11 +340,11 @@ class FunctionDef:
     def __init__(self, name):
         self.name = name
 
-    def __call__(self, *ast_arguments):
+    def __call__(self, *arguments):
         return FunctionSignature(
             self.name,
             ast.arguments(
-                args=list(ast_arguments),
+                args=list(arguments),
                 vararg=None,
                 kwonlyargs=[],
                 kw_defaults=[],
@@ -285,10 +358,10 @@ class Index:
     __slots__ = ()
 
     def __call__(self, index):
-        return ast.Index(value=to_node(index), ctx=ast.Load())
+        return ast.Index(value=to_node(index))
 
 
-getidx = Index()
+idx = Index()
 
 
 class Subscript:
@@ -402,3 +475,6 @@ class ClassDeclaration:
 
 
 class_ = ClassDeclaration()
+
+
+pass_ = ast.Pass()
