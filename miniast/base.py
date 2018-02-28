@@ -3,6 +3,7 @@ Constructing Python ASTs in Python is quite verbose, let's clean it up a bit.
 """
 
 import ast
+import builtins
 import collections
 import copy
 import functools
@@ -549,3 +550,11 @@ class ClassDeclaration:
 
 class_ = ClassDeclaration()
 pass_ = ast.Pass()
+
+
+def exec(obj, *args, **kwargs):
+    if isinstance(obj, ast.Module):
+        obj = compile(obj, __file__, 'exec')
+    elif isinstance(obj, ast.AST):
+        obj = compile(mod(obj), __file__, 'exec')
+    return builtins.exec(obj, *args, **kwargs)
