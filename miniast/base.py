@@ -306,13 +306,6 @@ class While:
 while_ = While()
 
 
-class IfElse:
-    __slots__ = ()
-
-    def __call__(self, test, body, orelse):
-        return ast.IfExp(test, body, orelse)
-
-
 def ifelse(test, body, orelse):
     return ast.IfExp(test, body, orelse)
 
@@ -329,7 +322,6 @@ def_ = FunctionDeclaration()
 
 
 class FunctionSignature(StatementWithBody):
-
     __slots__ = 'name', 'arguments'
 
     def __init__(self, name, arguments):
