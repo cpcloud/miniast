@@ -3,26 +3,26 @@ import ast
 import pytest
 
 from miniast import (
-    load,
-    store,
-    arg,
-    call,
-    idx,
-    sub,
     alias,
-    import_from,
-    NONE,
-    TRUE,
-    FALSE,
+    arg,
+    Attribute,
+    call,
     class_,
     def_,
-    return_,
-    if_,
-    while_,
+    FALSE,
     for_,
+    idx,
+    if_,
+    from_,
+    mod,
+    Name,
+    NONE,
     pass_,
-    Attribute,
-    Name
+    return_,
+    sub,
+    TRUE,
+    var,
+    while_,
 )
 
 from miniast import sourcify
@@ -63,13 +63,18 @@ def test_eq():
 
 
 def test_load():
-    assert eq(load.foo, ast.Name(id='foo', ctx=ast.Load()))
-    assert eq(load['bar'], ast.Name(id='bar', ctx=ast.Load()))
+    assert eq(var.foo, ast.Name(id='foo', ctx=ast.Load()))
+    assert eq(var['bar'], ast.Name(id='bar', ctx=ast.Load()))
 
 
-def test_store():
-    assert eq(store.foo, ast.Name(id='foo', ctx=ast.Store()))
-    assert eq(store['bar'], ast.Name(id='bar', ctx=ast.Store()))
+def test_assign():
+    assert eq(
+        var.foo.store(0),
+        ast.Assign(
+            targets=[ast.Name(id='foo', ctx=ast.Store())],
+            value=ast.Num(n=0)
+        )
+    )
 
 
 def test_arg():
@@ -84,7 +89,7 @@ def test_call():
         )
     )
     assert eq(
-        call.func(load.a, b=load.b),
+        call.func(var.a, b=var.b),
         ast.Call(
             func=ast.Name(id='func', ctx=ast.Load()),
             args=[ast.Name(id='a', ctx=ast.Load())],
@@ -97,7 +102,7 @@ def test_call():
 
 def test_attr():
     assert eq(
-        load.foo.get_a_thing,
+        var.foo.get_a_thing,
         Attribute(
             value=Name(id='foo', ctx=ast.Load()),
             attr='get_a_thing',
@@ -114,7 +119,7 @@ def test_idx(i):
 @pytest.mark.parametrize('i', range(5))
 def test_sub(i):
     assert eq(
-        sub(load.a, idx(i)),
+        sub(var.a, idx(i)),
         ast.Subscript(
             value=ast.Name(id='a', ctx=ast.Load()),
             slice=ast.Index(value=ast.Num(n=i)),
@@ -136,7 +141,7 @@ def test_alias():
 
 def test_import_from():
     assert eq(
-        import_from.bar[alias.foo, alias['foo', 'baz']],
+        from_.bar.import_(alias.foo, baz=alias.foo),
         ast.ImportFrom(
             module='bar',
             names=[
@@ -156,9 +161,9 @@ def test_constants():
 
 def test_classdef():
 
-    myklass = class_.Yuge(load.object, metaclass=load.object)[
+    myklass = class_.Yuge(var.object, metaclass=var.object)[
         def_.method1(arg.self, arg.a)[
-            if_(load.a == 1)[return_(load.a + 1)].else_[return_(1)]
+            if_(var.a == 1)[return_(var.a + 1)].else_[return_(1)]
         ]
     ]
     s = sourcify(myklass)
@@ -172,7 +177,7 @@ class Yuge(object, metaclass=object):
 
 
 def test_while():
-    loop = while_(load.x < load.y)[
+    loop = while_(var.x < var.y)[
         pass_
     ]
     assert sourcify(loop) == """\
@@ -182,7 +187,7 @@ while x < y:
 
 
 def test_for():
-    loop = for_(load.x).in_(load.y)[
+    loop = for_(var.x).in_(var.y)[
         call.print(1)
     ]
     assert sourcify(loop) == """\
@@ -193,19 +198,19 @@ for x in y:
 
 def test_complex_class():
     klass = class_.Average[
-        def_['__init__'](arg.self)[
-            store.self.value.assign(0.0),
-            store.self.count.assign(0),
+        def_.__init__(arg.self)[
+            var.self.value.store(0.0),
+            var.self.count.store(0),
         ],
         def_.step(arg.self, arg.value)[
-            if_(load.value.is_not(NONE))[
-                store.self.value.iadd(load.value),
-                store.self.count.iadd(1)
+            if_(var.value.is_not(NONE))[
+                var.self.value.iadd(var.value),
+                var.self.count.iadd(1)
             ]
         ],
         def_.finalize(arg.self)[
-            if_(load.self.count)[
-                return_(load.self.value / load.self.count)
+            if_(var.self.count)[
+                return_(var.self.value / var.self.count)
             ]
         ]
     ]
@@ -223,3 +228,19 @@ class Average:
     def finalize(self):
         if self.count:
             return self.value / self.count"""
+
+
+def test_exec_class():
+    klass = class_.Average[
+        def_.__init__(arg.self)[
+            var.self.value.store(0.0)
+        ]
+    ]
+    exec(compile(mod(klass), __file__, 'exec'))
+    assert 'Average' in locals()
+
+
+def test_store_compile():
+    expr = mod(var.self.x.store(0))
+    assert sourcify(expr) == 'self.x = 0'
+    assert ast.dump(expr) == ast.dump(ast.parse('self.x = 0'))
