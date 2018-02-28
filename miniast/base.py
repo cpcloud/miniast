@@ -79,16 +79,11 @@ def s(value):
     return ast.Str(s=value)
 
 
-class Assign(ast.Assign):
-    def __init__(self, targets, value):
-        super().__init__(targets=targets, value=value)
-
-
 class Assignable:
-    def assign(self, value):
+    def store(self, value):
         fields = {field: getattr(self, field) for field in self._fields}
         fields['ctx'] = ast.Store()
-        return Assign(targets=[type(self)(**fields)], value=to_node(value))
+        return ast.Assign(targets=[type(self)(**fields)], value=to_node(value))
 
 
 class Indexable:
@@ -104,9 +99,10 @@ class Name(ast.Name, Comparable, BinOp, Assignable, Indexable):
         return Attribute(
             value=self,
             attr=name,
-            ctx=type(self.ctx)(),
+            ctx=ast.Load(),
             lineno=self.lineno,
-            col_offset=self.col_offset)
+            col_offset=self.col_offset
+        )
 
 
 class Load(Comparable):
@@ -123,7 +119,7 @@ class Load(Comparable):
     __getattr__ = __getitem__
 
 
-load = Load()
+var = Load()
 
 
 class Raise:
@@ -134,18 +130,6 @@ class Raise:
 
 
 raise_ = Raise()
-
-
-class Store:
-    __slots__ = ()
-
-    def __getitem__(self, key):
-        return Name(id=key, ctx=ast.Store())
-
-    __getattr__ = __getitem__
-
-
-store = Store()
 
 
 class Arg:
@@ -183,7 +167,7 @@ class Call:
     __slots__ = ()
 
     def __getitem__(self, key):
-        return lambda *args, **kwargs: self(load[key], *args, **kwargs)
+        return lambda *args, **kwargs: self(var[key], *args, **kwargs)
 
     __getattr__ = __getitem__
 
@@ -212,7 +196,7 @@ class Attribute(ast.Attribute, Assignable, Indexable, Comparable, BinOp):
             col_offset=col_offset)
 
     def __getattr__(self, name):
-        return type(self)(value=self, attr=name, ctx=type(self.ctx)())
+        return type(self)(value=self, attr=name, ctx=ast.Load())
 
     def __call__(self, *args, **kwargs):
         return call(self, *args, **kwargs)
@@ -337,7 +321,7 @@ class FunctionDeclaration:
     def __getitem__(self, name):
         return FunctionDef(name=name)
 
-    __getattr__ = __getitem__
+    __getattribute__ = __getitem__
 
 
 def_ = FunctionDeclaration()
@@ -391,6 +375,7 @@ def decorate(*functions):
 
 def mod(*lines):
     module = ast.Module(body=list(lines))
+    module = ast.fix_missing_locations(module)
     return module
 
 
@@ -432,7 +417,7 @@ class Alias:
     """
     __slots__ = ()
 
-    def __getattr__(self, name):
+    def __getattribute__(self, name):
         return ast.alias(name=name, asname=None)
 
     def __getitem__(self, key):
@@ -453,11 +438,10 @@ alias = Alias()
 class ImportFrom:
     __slots__ = ()
 
-    def __getattr__(self, name):
-        return DottedModule(name)
+    def __getitem__(self, key):
+        return DottedModule(key)
 
-
-import_from = ImportFrom()
+    __getattr__ = __getitem__
 
 
 class DottedModule:
@@ -466,12 +450,33 @@ class DottedModule:
     def __init__(self, name):
         self.name = name
 
-    def __getitem__(self, key):
-        names = [key] if isinstance(key, ast.alias) else list(key)
+    def import_(self, *aliases, **kwargs):
+        names = [*aliases]
+        names += [
+            ast.alias(name=a.name, asname=asname)
+            for asname, a in kwargs.items()
+        ]
         return ast.ImportFrom(module=self.name, names=names, level=0)
 
     def __getattr__(self, name):
         return DottedModule('{}.{}'.format(self.name, name))
+
+
+class Import:
+    __slots__ = ()
+
+    def __getitem__(self, key):
+        if isinstance(key, tuple):
+            names = [alias[k] for k in key]
+        else:
+            names = [alias[key]]
+        return ast.Import(names=names)
+
+    __getattr__ = __getitem__
+
+
+from_ = ImportFrom()
+import_ = Import()
 
 
 class Return:
@@ -543,6 +548,4 @@ class ClassDeclaration:
 
 
 class_ = ClassDeclaration()
-
-
 pass_ = ast.Pass()
