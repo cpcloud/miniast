@@ -11,6 +11,7 @@ from miniast import (
     sub,
     alias,
     import_from,
+    lambda_,
     NONE,
     TRUE,
     FALSE,
@@ -223,3 +224,8 @@ class Average:
     def finalize(self):
         if self.count:
             return self.value / self.count"""
+
+
+def test_lambda():
+    func = lambda_(arg.x, arg.y)[load.x + 1]
+    assert sourcify(func) == 'lambda x, y: x + 1'

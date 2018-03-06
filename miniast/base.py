@@ -546,3 +546,23 @@ class_ = ClassDeclaration()
 
 
 pass_ = ast.Pass()
+
+
+class LambdaWithSignature:
+    __slots__ = 'signature',
+
+    def __init__(self, *signature):
+        self.signature = list(signature)
+
+    def __getitem__(self, expr):
+        return ast.Lambda(args=ast.arguments(args=self.signature), body=expr)
+
+
+class Lambda:
+    __slots__ = ()
+
+    def __call__(self, *signature):
+        return LambdaWithSignature(*signature)
+
+
+lambda_ = Lambda()
