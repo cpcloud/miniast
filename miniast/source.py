@@ -10,10 +10,10 @@ class SourceVisitor(ast.NodeVisitor):
     def visit(self, node):
         node_type = type(node)
         node_typename = node_type.__name__
-        method = getattr(self, f'visit_{node_typename}', None)
+        method = getattr(self, 'visit_{}'.format(node_typename), None)
         if method is None:
             raise TypeError(
-                f'Node of type {node_typename} has no visit method'
+                'Node of type {} has no visit method'.format(node_typename)
             )
         return method(node)
 
@@ -30,8 +30,9 @@ class SourceVisitor(ast.NodeVisitor):
         return ''
 
     def visit_BinOp(self, node):
-        left, op, right = node.left, node.op, node.right
-        return f'{self.visit(left)} {self.visit(op)} {self.visit(right)}'
+        return '{} {} {}'.format(
+            self.visit(node.left), self.visit(node.op), self.visit(node.right)
+        )
 
     def visit_Add(self, node):
         return '+'
@@ -52,10 +53,11 @@ class SourceVisitor(ast.NodeVisitor):
         return '**'
 
     def visit_AugAssign(self, node):
-        target = node.target
-        op = node.op
-        value = node.value
-        return f'{self.visit(target)} {self.visit(op)}= {self.visit(value)}'
+        return '{} {}= {}'.format(
+            self.visit(node.target),
+            self.visit(node.op),
+            self.visit(node.value)
+        )
 
     def visit_If(self, node):
         test = self.visit(node.test)
@@ -66,14 +68,19 @@ class SourceVisitor(ast.NodeVisitor):
                 '\n'.join(map(self.visit, node.orelse)),
                 spaces
             )
-            return f'if {test}:\n{body}\nelse:\n{orelse}'
-        return f'if {test}:\n{body}'
+            return 'if {test}:\n{body}\nelse:\n{orelse}'.format(
+                test=test,
+                body=body,
+                orelse=orelse
+            )
+        return 'if {test}:\n{body}'.format(test=test, body=body)
 
     def visit_IfExp(self, node):
-        body = self.visit(node.body)
-        test = self.visit(node.test)
-        orelse = self.visit(node.orelse)
-        return f'{body} if {test} else {orelse}'
+        return '{body} if {test} else {orelse}'.format(
+            body=self.visit(node.body),
+            test=self.visit(node.test),
+            orelse=self.visit(node.orelse),
+        )
 
     def visit_And(self, node):
         return 'and'
@@ -115,64 +122,69 @@ class SourceVisitor(ast.NodeVisitor):
         return 'is not'
 
     def visit_UnaryOp(self, node):
-        return f'{self.visit(node.op)}{self.visit(node.operand)}'
+        return '{}{}'.format(self.visit(node.op), self.visit(node.operand))
 
     def visit_Compare(self, node):
         left = self.visit(node.left)
         return left + ' '.join(
-            f' {self.visit(op)} {self.visit(comparator)}'
+            ' {} {}'.format(self.visit(op), self.visit(comparator))
             for op, comparator in zip(node.ops, node.comparators)
         )
 
     def visit_BoolOp(self, node):
-        left, op, right = node.left, node.op, node.right
-        return f'{self.visit(left)} {self.visit(op)} {self.visit(right)}'
+        return '{} {} {}'.format(
+            self.visit(node.left),
+            self.visit(node.op),
+            self.visit(node.right),
+        )
 
     def visit_Return(self, node):
-        return f'return {self.visit(node.value)}'
+        return 'return {}'.format(self.visit(node.value))
 
     def visit_Attribute(self, node):
-        return f'{self.visit(node.value)}.{node.attr}'
+        return '{}.{}'.format(self.visit(node.value), node.attr)
 
     def visit_ImportFrom(self, node):
         imports = ', '.join(
             ' as '.join(filter(None, (alias.name, alias.asname)))
             for alias in node.names
         )
-        return f'from {node.module} import {imports}'
+        return 'from {} import {}'.format(node.module, imports)
 
     def visit_Assign(self, node):
-        target = ', '.join(map(self.visit, node.targets))
-        return f'{target} = {self.visit(node.value)}'
+        return '{} = {}'.format(
+            ', '.join(map(self.visit, node.targets)),
+            self.visit(node.value)
+        )
 
     def visit_FunctionDef(self, node):
         decorator_list = '\n'.join(map(self.visit, node.decorator_list))
-        decorators = f'@{decorator_list}\n' if decorator_list else ''
+        decorators = '@{}\n'.format(decorator_list) if decorator_list else ''
         args = ', '.join(map(self.visit, node.args.args))
         body = textwrap.indent(
             '\n'.join(map(self.visit, node.body)),
             ' ' * 4
         )
-        return f'\n{decorators}def {node.name}({args}):\n{body}'
+        return '\n{}def {}({}):\n{}'.format(decorators, node.name, args, body)
 
     def visit_Call(self, node):
         if isinstance(node.func, ast.Attribute):
             func = self.visit(node.func)
             args = ',\n'.join(itertools.chain(
                 map(self.visit, node.args),
-                (f'{kw.arg}={self.visit(kw.value)!r}' for kw in node.keywords)
+                ('{}={!r}'.format(kw.arg, self.visit(kw.value))
+                    for kw in node.keywords)
             ))
             indented_args = textwrap.indent(args, ' ' * 4)
-            template = (
-                f'(\n{indented_args}\n)' if args else f'({indented_args})'
-            )
-            return f'{func}{template}'
+            template = ('(\n{}\n)' if args else '({})').format(indented_args)
+            return '{}{}'.format(func, template)
         else:
             args = ', '.join(itertools.chain(
                 map(self.visit, node.args),
-                (f'{kw.arg}={self.visit(kw.value)!r}' for kw in node.keywords)
+                ('{}={!r}'.format(kw.arg, self.visit(kw.value))
+                    for kw in node.keywords)
             ))
-            return f'{self.visit(node.func)}({args})'
+            return '{}({})'.format(self.visit(node.func), args)
 
     def visit_NameConstant(self, node):
         return node.value
@@ -196,17 +208,17 @@ class SourceVisitor(ast.NodeVisitor):
         return 'pass'
 
     def visit_Raise(self, node):
-        raise_string = f'raise {self.visit(node.exc)}'
+        raise_string = 'raise {}'.format(self.visit(node.exc))
         cause = getattr(node, 'cause', None)
 
         if cause is not None:
-            return f'{raise_string} from {self.visit(cause)}'
+            return '{} from {}'.format(raise_string, self.visit(cause))
         return raise_string
 
     def visit_Subscript(self, node):
         value = self.visit(node.value)
         slice = self.visit(node.slice)
-        return f'{value}[{slice}]'
+        return '{}[{}]'.format(value, slice)
 
     def visit_Index(self, node):
         return self.visit(node.value)
@@ -218,14 +230,14 @@ class SourceVisitor(ast.NodeVisitor):
 
         bases = list(map(self.visit, node.bases))
         keywords = node.keywords
-        buf = [f'class {node.name}']
+        buf = ['class {}'.format(node.name)]
 
         if bases:
-            buf.append(f"({', '.join(bases)}")
+            buf.append('({}'.format(', '.join(bases)))
 
         if keywords:
             kwargs = ', '.join(
-                f'{k.arg}={self.visit(k.value)}' for k in keywords
+                '{}={}'.format(k.arg, self.visit(k.value)) for k in keywords
             )
             buf.append(f", {kwargs}")
 
@@ -233,18 +245,18 @@ class SourceVisitor(ast.NodeVisitor):
             buf.append(')')
 
         body = textwrap.indent('\n'.join(map(self.visit, node.body)), ' ' * 4)
-        buf.append(f':{body}')
+        buf.append(':{}'.format(body))
         return ''.join(buf)
 
     def visit_While(self, node):
         body = textwrap.indent('\n'.join(map(self.visit, node.body)), ' ' * 4)
-        return f'while {self.visit(node.test)}:\n{body}'
+        return 'while {}:\n{}'.format(self.visit(node.test), body)
 
     def visit_For(self, node):
         target = self.visit(node.target)
         iter = self.visit(node.iter)
         body = textwrap.indent('\n'.join(map(self.visit, node.body)), ' ' * 4)
-        return f'for {target} in {iter}:\n{body}'
+        return 'for {} in {}:\n{}'.format(target, iter, body)
 
 
 def sourcify(mod):
