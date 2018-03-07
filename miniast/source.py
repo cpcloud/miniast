@@ -239,7 +239,7 @@ class SourceVisitor(ast.NodeVisitor):
             kwargs = ', '.join(
                 '{}={}'.format(k.arg, self.visit(k.value)) for k in keywords
             )
-            buf.append(f", {kwargs}")
+            buf.append(', {}'.format(kwargs))
 
         if bases or keywords:
             buf.append(')')
