@@ -23,6 +23,9 @@ class SourceVisitor(ast.NodeVisitor):
             self.visit(node.body)
         )
 
+    def visit_List(self, node):
+        return '[{}]'.format(', '.join(map(self.visit, node.elts)))
+
     def visit_NoneType(self, node):
         return ''
 
