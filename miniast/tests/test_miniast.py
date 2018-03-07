@@ -249,4 +249,4 @@ def test_store_compile():
 
 def test_lambda():
     func = lambda_(arg.x, arg.y)[var.x + 1 * var.y]
-    assert sourcify(func) == 'lambda x, y: x + 1'
+    assert sourcify(func) == 'lambda x, y: x + 1 * y'

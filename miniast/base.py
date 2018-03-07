@@ -13,10 +13,23 @@ class StatementWithBody:
         return self(*to_list(*body))
 
 
+SWAPPED_ARGUMENT_METHODS = {
+    '__radd__',
+    '__rmul__',
+}
+
+
 def binary_operations(mapping, func):
     def decorator(cls):
         for method_name, op in mapping.items():
-            setattr(cls, method_name, functools.partialmethod(func, op=op()))
+            if method_name in SWAPPED_ARGUMENT_METHODS:
+                f = functools.partialmethod(
+                    lambda self, other, op: func(to_node(other), self, op),
+                    op=op()
+                )
+            else:
+                f = functools.partialmethod(func, op=op())
+            setattr(cls, method_name, f)
         return cls
     return decorator
 
@@ -47,8 +60,10 @@ class Comparable:
 @binary_operations(
     {
         '__add__': ast.Add,
+        '__radd__': ast.Add,
         '__sub__': ast.Sub,
         '__mul__': ast.Mult,
+        '__rmul__': ast.Mult,
         '__floordiv__': ast.FloorDiv,
         '__truediv__': ast.Div,
         '__div__': ast.Div,
@@ -150,7 +165,9 @@ def to_node(value):
     elif isinstance(value, (int, float)):
         return ast.Num(n=value)
     assert value is None or isinstance(value, ast.AST), \
-        f'value must be None or AST instance, got {type(value).__name__}'
+        'value must be None or AST instance, got {}'.format(
+            type(value).__name__
+        )
     return value
 
 
