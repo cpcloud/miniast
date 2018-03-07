@@ -14,6 +14,7 @@ from miniast import (
     idx,
     if_,
     from_,
+    lambda_,
     mod,
     Name,
     NONE,
@@ -244,3 +245,8 @@ def test_store_compile():
     expr = mod(var.self.x.store(0))
     assert sourcify(expr) == 'self.x = 0'
     assert ast.dump(expr) == ast.dump(ast.parse('self.x = 0'))
+
+
+def test_lambda():
+    func = lambda_(arg.x, arg.y)[var.x + 1 * var.y]
+    assert sourcify(func) == 'lambda x, y: x + 1'

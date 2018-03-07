@@ -17,6 +17,15 @@ class SourceVisitor(ast.NodeVisitor):
             )
         return method(node)
 
+    def visit_Lambda(self, node):
+        return 'lambda {}: {}'.format(
+            ', '.join(map(self.visit, node.args.args)),
+            self.visit(node.body)
+        )
+
+    def visit_List(self, node):
+        return '[{}]'.format(', '.join(map(self.visit, node.elts)))
+
     def visit_NoneType(self, node):
         return ''
 
