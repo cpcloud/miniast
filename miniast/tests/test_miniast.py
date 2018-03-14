@@ -250,3 +250,13 @@ def test_store_compile():
 def test_lambda():
     func = lambda_(arg.x, arg.y)[var.x + 1 * var.y]
     assert sourcify(func) == 'lambda x, y: x + 1 * y'
+
+
+def test_args_kwargs():
+    func = def_.my_func(*arg.args, **arg.kwargs)[
+        call.print(1)
+    ]
+    result = sourcify(func)
+    assert result == """
+def my_func(*args, **kwargs):
+    print(1)"""
