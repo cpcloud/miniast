@@ -147,11 +147,38 @@ class Raise:
 raise_ = Raise()
 
 
+class SpecialArg(collections.Mapping, ast.arg):
+    def __init__(self, arg, annotation=None):
+        super().__init__(arg=arg, annotation=annotation)
+
+    def __hash__(self):
+        return hash((type(self), self.arg, self.annotation))
+
+    def __iter__(self):
+        yield Args(self.arg)
+
+    def __getitem__(self, key):
+        if isinstance(key, Args):
+            return Kwargs(key)
+
+        raise TypeError(
+            '__getitem__ not defined for class {}'.format(type(self).__name__)
+        )
+
+
+class Args(str):
+    pass
+
+
+class Kwargs(SpecialArg):
+    pass
+
+
 class Arg:
     __slots__ = ()
 
     def __getitem__(self, key):
-        return ast.arg(arg=key, annotation=None)
+        return SpecialArg(arg=key)
 
     __getattr__ = __getitem__
 
@@ -360,15 +387,18 @@ class FunctionDef:
     def __init__(self, name):
         self.name = name
 
-    def __call__(self, *arguments):
+    def __call__(self, *arguments, **kwargs):
+        varargs = [a for a in arguments if isinstance(a, Args)]
+        kwargs = list(kwargs.values())
+        arguments = [a for a in arguments if not isinstance(a, (Args, dict))]
         return FunctionSignature(
             self.name,
             ast.arguments(
                 args=list(arguments),
-                vararg=None,
+                vararg=varargs[0] if varargs else None,
                 kwonlyargs=[],
                 kw_defaults=[],
-                kwargs=None,
+                kwarg=kwargs[0] if kwargs else None,
                 defaults=[],
             )
         )

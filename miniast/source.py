@@ -157,10 +157,21 @@ class SourceVisitor(ast.NodeVisitor):
             self.visit(node.value)
         )
 
+    def visit_SpecialArg(self, node):
+        return node.arg
+
+    def visit_Args(self, node):
+        return '*{}'.format(node)
+
+    def visit_Kwargs(self, node):
+        return '**{}'.format(node.arg)
+
     def visit_FunctionDef(self, node):
         decorator_list = '\n'.join(map(self.visit, node.decorator_list))
         decorators = '@{}\n'.format(decorator_list) if decorator_list else ''
-        args = ', '.join(map(self.visit, node.args.args))
+        xargs = node.args
+        allargs = itertools.chain(xargs.args, [xargs.vararg, xargs.kwarg])
+        args = ', '.join(map(self.visit, allargs))
         body = textwrap.indent(
             '\n'.join(map(self.visit, node.body)),
             ' ' * 4
