@@ -1,6 +1,7 @@
 import ast
 import itertools
-import textwrap
+
+from miniast.util import indent
 
 
 class SourceVisitor(ast.NodeVisitor):
@@ -79,13 +80,9 @@ class SourceVisitor(ast.NodeVisitor):
 
     def visit_If(self, node):
         test = self.visit(node.test)
-        spaces = ' ' * 4
-        body = textwrap.indent('\n'.join(map(self.visit, node.body)), spaces)
+        body = indent('\n'.join(map(self.visit, node.body)))
         if node.orelse:
-            orelse = textwrap.indent(
-                '\n'.join(map(self.visit, node.orelse)),
-                spaces
-            )
+            orelse = indent('\n'.join(map(self.visit, node.orelse)))
             return 'if {test}:\n{body}\nelse:\n{orelse}'.format(
                 test=test,
                 body=body,
@@ -197,10 +194,7 @@ class SourceVisitor(ast.NodeVisitor):
         allargs = itertools.chain(
             xargs.args, filter(None, [xargs.vararg, xargs.kwarg]))
         args = ', '.join(map(self.visit, allargs))
-        body = textwrap.indent(
-            '\n'.join(map(self.visit, node.body)),
-            ' ' * 4
-        )
+        body = indent('\n'.join(map(self.visit, node.body)))
         return '\n{}def {}({}):\n{}'.format(decorators, node.name, args, body)
 
     def visit_Call(self, node):
@@ -211,7 +205,7 @@ class SourceVisitor(ast.NodeVisitor):
                 ('{}={!r}'.format(kw.arg, self.visit(kw.value))
                     for kw in node.keywords)
             ))
-            indented_args = textwrap.indent(args, ' ' * 4)
+            indented_args = indent(args)
             template = ('(\n{}\n)' if args else '({})').format(indented_args)
             return '{}{}'.format(func, template)
         else:
@@ -280,18 +274,18 @@ class SourceVisitor(ast.NodeVisitor):
         if bases or keywords:
             buf.append(')')
 
-        body = textwrap.indent('\n'.join(map(self.visit, node.body)), ' ' * 4)
+        body = indent('\n'.join(map(self.visit, node.body)))
         buf.append(':{}'.format(body))
         return ''.join(buf)
 
     def visit_While(self, node):
-        body = textwrap.indent('\n'.join(map(self.visit, node.body)), ' ' * 4)
+        body = indent('\n'.join(map(self.visit, node.body)))
         return 'while {}:\n{}'.format(self.visit(node.test), body)
 
     def visit_For(self, node):
         target = self.visit(node.target)
         iter = self.visit(node.iter)
-        body = textwrap.indent('\n'.join(map(self.visit, node.body)), ' ' * 4)
+        body = indent('\n'.join(map(self.visit, node.body)))
         return 'for {} in {}:\n{}'.format(target, iter, body)
 
 
