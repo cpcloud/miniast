@@ -9,6 +9,8 @@ import functools
 
 
 class StatementWithBody:
+    __slots__ = ()
+
     def __getitem__(self, *body):
         return self(*to_list(*body))
 
@@ -68,6 +70,8 @@ class Comparable:
         '__truediv__': ast.Div,
         '__div__': ast.Div,
         '__pow__': ast.Pow,
+        '__lshift__': ast.LShift,
+        '__rshift__': ast.RShift,
     },
 
     func=lambda self, other, op: ast.BinOp(
@@ -81,6 +85,8 @@ class Comparable:
         'ifloordiv': ast.FloorDiv,
         'idiv': ast.Div,
         'ipow': ast.Pow,
+        'ilshift': ast.LShift,
+        'irshift': ast.RShift,
     },
     func=lambda self, other, op: ast.AugAssign(
         target=self, op=op, value=to_node(other)
@@ -118,29 +124,22 @@ class Indexable:
         return sub(self, idx(key))
 
 
-class Name(ast.Name, Comparable, BinOp, Assignable, Indexable, Callable):
+class Attributable:
+    def __getattr__(self, name):
+        return Attribute(value=self, attr=name, ctx=ast.Load())
+
+
+class Name(
+    ast.Name,
+    Comparable,
+    BinOp,
+    Assignable,
+    Indexable,
+    Callable,
+    Attributable
+):
     def __init__(self, id, ctx, lineno=0, col_offset=0):
         super().__init__(id=id, ctx=ctx, lineno=lineno, col_offset=col_offset)
-
-    def __getattr__(self, name):
-        return Attribute(
-            value=self,
-            attr=name,
-            ctx=ast.Load(),
-            lineno=self.lineno,
-            col_offset=self.col_offset
-        )
-
-    def __call__(self, *args, **kwargs):
-        return ast.Call(
-            func=self,
-            args=list(map(to_node, args)),
-            keywords=[
-                ast.keyword(arg=key, value=value)
-                for key, value in kwargs.items()
-            ]
-        )
-        return ast.Call()
 
 
 class Tuple(ast.Tuple, Comparable, BinOp, Assignable, Indexable):
@@ -149,12 +148,7 @@ class Tuple(ast.Tuple, Comparable, BinOp, Assignable, Indexable):
             elts=elts, ctx=ctx, lineno=lineno, col_offset=col_offset)
 
 
-class Load(Comparable):
-    """
-    API
-    ---
-    load.foo == ast.Name('foo', ctx=ast.Load())
-    """
+class Var:
     __slots__ = ()
 
     def __getitem__(self, key):
@@ -165,7 +159,7 @@ class Load(Comparable):
     __getattr__ = __getitem__
 
 
-var = Load()
+var = Var()
 
 
 class Raise:
@@ -257,32 +251,14 @@ def to_expr(value):
     return value if isinstance(value, ast.stmt) else ast.Expr(value=value)
 
 
-class Call:
-    """
-    API
-    ---
-    call.func(load.foo, nopython=TRUE)
-    """
-    __slots__ = ()
-
-    def __getitem__(self, key):
-        return lambda *args, **kwargs: self(var[key], *args, **kwargs)
-
-    __getattr__ = __getitem__
-
-    def __call__(self, callable, *args, **kwargs):
-        return ast.Call(
-            func=callable,
-            args=list(map(to_node, args)),
-            keywords=[
-                ast.keyword(arg=key, value=value)
-                for key, value in kwargs.items()
-            ]
-        )
-
-
 class Attribute(
-    ast.Attribute, Assignable, Indexable, Comparable, BinOp, Callable
+    ast.Attribute,
+    Assignable,
+    Indexable,
+    Comparable,
+    BinOp,
+    Callable,
+    Attributable
 ):
 
     def __init__(self, value, attr, ctx, lineno=0, col_offset=0):
@@ -292,9 +268,6 @@ class Attribute(
             ctx=ctx,
             lineno=lineno,
             col_offset=col_offset)
-
-    def __getattr__(self, name):
-        return type(self)(value=self, attr=name, ctx=ast.Load())
 
 
 class Else(StatementWithBody):
@@ -356,7 +329,7 @@ class For:
 
 class IteratedFor(StatementWithBody):
 
-    __slots__ = 'target', 'iter',
+    __slots__ = 'target', 'iter'
 
     def __init__(self, target, iter):
         self.target = target
@@ -479,18 +452,27 @@ class Index:
 idx = Index()
 
 
-class Subscript:
-    __slots__ = ()
-
-    def __call__(self, value, index):
-        return ast.Subscript(
+class Subscript(
+    ast.Subscript,
+    Comparable,
+    BinOp,
+    Assignable,
+    Indexable,
+    Callable,
+    Attributable
+):
+    def __init__(self, value, slice, ctx=None, lineno=0, col_offset=0):
+        super().__init__(
             value=value,
-            slice=index,
-            ctx=ast.Load(),
+            slice=slice,
+            ctx=ctx or ast.Load(),
+            lineno=lineno,
+            col_offset=col_offset,
         )
 
 
-sub = Subscript()
+def sub(value, index):
+    return Subscript(value=value, slice=index, ctx=ast.Load())
 
 
 TRUE = ast.NameConstant(value=True)
