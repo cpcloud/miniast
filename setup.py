@@ -9,7 +9,7 @@ setup(
     packages=find_packages(),
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
-    description='Very concise API for writing Python ASTs',
+    description='Lightweight macros for Python',
     license='Apache License, Version 2.0',
     author='Phillip Cloud',
     author_email='cpcloud@gmail.com',
