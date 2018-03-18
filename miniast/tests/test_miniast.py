@@ -26,7 +26,9 @@ from miniast import (
     while_,
     SpecialArg,
     yield_,
-    yield_from
+    yield_from,
+    Tuple,
+    to_node,
 )
 
 from miniast import sourcify
@@ -283,3 +285,36 @@ def test_yield_from():
     assert result == """
 def my_func(x):
     yield from x"""
+
+
+def test_multiple_assignment():
+    rhs = 1, 2, 3
+    lhs = var[var.a, var.b, var.c]
+    assign = lhs.store(rhs)
+    result = sourcify(assign)
+    assert result == '(a, b, c) = (1, 2, 3)'
+
+
+def n(value):
+    return ast.Num(n=value)
+
+
+@pytest.mark.parametrize(
+    ('value', 'expected'),
+    [
+        ((), Tuple(elts=[], ctx=ast.Load())),
+        ((1, 2, 3), Tuple(elts=[n(1), n(2), n(3)], ctx=ast.Load())),
+
+        ([], ast.List(elts=[], ctx=ast.Load())),
+        ([1, 2, 3], ast.List(elts=[n(1), n(2), n(3)], ctx=ast.Load())),
+
+        ({}, ast.Dict(keys=[], values=[])),
+        ({1: 2, 3: 4}, ast.Dict(keys=[n(1), n(3)], values=[n(2), n(4)])),
+
+        (set(), ast.Set(elts=[])),
+        ({1, 2, 3}, ast.Set(elts=[n(1), n(2), n(3)])),
+    ]
+)
+def test_to_node(value, expected):
+    result = to_node(value)
+    assert eq(expected, result)
