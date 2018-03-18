@@ -288,12 +288,22 @@ def my_func(x):
     yield from x"""
 
 
-def test_multiple_assignment():
-    rhs = 1, 2, 3
-    lhs = var[var.a, var.b, var.c]
-    assign = lhs.store(rhs)
-    result = sourcify(assign)
-    assert result == '(a, b, c) = (1, 2, 3)'
+@pytest.mark.parametrize(
+    ('expr', 'expected'),
+    [
+        (
+            var[var.a, var.b, var.c].store((1, 2, 3)),
+            '(a, b, c) = (1, 2, 3)'
+        ),
+        (
+            var[var.self.a, var.x.b[0].c[var.r.a[var.i]]].store((1, 2)),
+            '(self.a, x.b[0].c[r.a[i]]) = (1, 2)'
+        )
+    ]
+)
+def test_multiple_assignment(expr, expected):
+    result = sourcify(expr)
+    assert result == expected
 
 
 def n(value):
