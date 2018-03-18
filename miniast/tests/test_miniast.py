@@ -25,6 +25,8 @@ from miniast import (
     var,
     while_,
     SpecialArg,
+    yield_,
+    yield_from
 )
 
 from miniast import sourcify
@@ -261,3 +263,23 @@ def test_args_kwargs():
     assert result == """
 def my_func(*args, **kwargs):
     print(1)"""
+
+
+def test_yield():
+    func = def_.my_func(arg.x)[
+        yield_(var.x)
+    ]
+    result = sourcify(func)
+    assert result == """
+def my_func(x):
+    yield x"""
+
+
+def test_yield_from():
+    func = def_.my_func(arg.x)[
+        yield_from(var.x)
+    ]
+    result = sourcify(func)
+    assert result == """
+def my_func(x):
+    yield from x"""

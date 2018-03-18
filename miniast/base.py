@@ -608,3 +608,11 @@ class Lambda:
 
 
 lambda_ = Lambda()
+
+
+def yield_(value):
+    return ast.Yield(value=value)
+
+
+def yield_from(value):
+    return ast.YieldFrom(value=value)
