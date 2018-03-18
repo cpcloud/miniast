@@ -26,6 +26,24 @@ class SourceVisitor(ast.NodeVisitor):
     def visit_List(self, node):
         return '[{}]'.format(', '.join(map(self.visit, node.elts)))
 
+    def visit_Tuple(self, node):
+        elements = node.elts
+        length = len(elements)
+        if length == 1:
+            return '({},)'.format(self.visit(elements[0]))
+        return '({})'.format(', '.join(map(self.visit, elements)))
+
+    def visit_Dict(self, node):
+        return '{{{}}}'.format(
+            ', '.join(map('{}: {}'.format, node.keys, node.values))
+        )
+
+    def visit_Set(self, node):
+        elements = node.elts
+        if not elements:
+            return 'set()'
+        return '{{{}}}'.format(', '.join(map(self.visit, elements)))
+
     def visit_NoneType(self, node):
         return ''
 

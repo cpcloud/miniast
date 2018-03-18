@@ -120,6 +120,12 @@ class Name(ast.Name, Comparable, BinOp, Assignable, Indexable):
         )
 
 
+class Tuple(ast.Tuple, Comparable, BinOp, Assignable, Indexable):
+    def __init__(self, elts, ctx, lineno=0, col_offset=0):
+        super().__init__(
+            elts=elts, ctx=ctx, lineno=lineno, col_offset=col_offset)
+
+
 class Load(Comparable):
     """
     API
@@ -129,6 +135,8 @@ class Load(Comparable):
     __slots__ = ()
 
     def __getitem__(self, key):
+        if isinstance(key, tuple):
+            return Tuple(elts=list(map(to_node, key)), ctx=ast.Load())
         return Name(id=key, ctx=ast.Load())
 
     __getattr__ = __getitem__
@@ -205,6 +213,16 @@ def to_node(value):
         return ast.Str(s=value)
     elif isinstance(value, (int, float)):
         return ast.Num(n=value)
+    elif isinstance(value, list):
+        return ast.List(elts=list(map(to_node, value)), ctx=ast.Load())
+    elif isinstance(value, tuple):
+        return ast.Tuple(elts=list(map(to_node, value)), ctx=ast.Load())
+    elif isinstance(value, dict):
+        keys = list(map(to_node, value.keys()))
+        values = list(map(to_node, value.values()))
+        return ast.Dict(keys=keys, values=values)
+    elif isinstance(value, set):
+        return ast.Set(elts=list(map(to_node, value)))
     assert value is None or isinstance(value, ast.AST), \
         'value must be None or AST instance, got {}'.format(
             type(value).__name__
