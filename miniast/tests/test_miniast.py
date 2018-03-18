@@ -24,6 +24,7 @@ from miniast import (
     TRUE,
     var,
     while_,
+    SpecialArg,
 )
 
 from miniast import sourcify
@@ -79,7 +80,7 @@ def test_assign():
 
 
 def test_arg():
-    assert eq(arg.fizzbuzz, ast.arg(arg='fizzbuzz', annotation=None))
+    assert eq(arg.fizzbuzz, SpecialArg(arg='fizzbuzz', annotation=None))
 
 
 def test_call():
