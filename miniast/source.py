@@ -82,6 +82,12 @@ class SourceVisitor(ast.NodeVisitor):
             orelse=self.visit(node.orelse),
         )
 
+    def visit_Yield(self, node):
+        return 'yield {}'.format(self.visit(node.value))
+
+    def visit_YieldFrom(self, node):
+        return 'yield from {}'.format(self.visit(node.value))
+
     def visit_And(self, node):
         return 'and'
 
