@@ -6,7 +6,6 @@ from miniast import (
     alias,
     arg,
     Attribute,
-    call,
     class_,
     def_,
     FALSE,
@@ -89,13 +88,15 @@ def test_arg():
 
 def test_call():
     assert eq(
-        call.func(),
+        var.foo(1, 2),
         ast.Call(
-            func=ast.Name(id='func', ctx=ast.Load()), args=[], keywords=[]
+            func=ast.Name(id='foo', ctx=ast.Load()),
+            args=[n(1), n(2)],
+            keywords=[],
         )
     )
     assert eq(
-        call.func(var.a, b=var.b),
+        var.func(var.a, b=var.b),
         ast.Call(
             func=ast.Name(id='func', ctx=ast.Load()),
             args=[ast.Name(id='a', ctx=ast.Load())],
@@ -194,7 +195,7 @@ while x < y:
 
 def test_for():
     loop = for_(var.x).in_(var.y)[
-        call.print(1)
+        var.print(1)
     ]
     assert sourcify(loop) == """\
 for x in y:
@@ -259,7 +260,7 @@ def test_lambda():
 
 def test_args_kwargs():
     func = def_.my_func(*arg.args, **arg.kwargs)[
-        call.print(1)
+        var.print(1)
     ]
     result = sourcify(func)
     assert result == """
