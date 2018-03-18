@@ -90,6 +90,18 @@ class BinOp:
     pass
 
 
+class Callable:
+    def __call__(self, *args, **kwargs):
+        return ast.Call(
+            func=self,
+            args=list(map(to_node, args)),
+            keywords=[
+                ast.keyword(arg=key, value=value)
+                for key, value in kwargs.items()
+            ]
+        )
+
+
 def s(value):
     return ast.Str(s=value)
 
@@ -106,7 +118,7 @@ class Indexable:
         return sub(self, idx(key))
 
 
-class Name(ast.Name, Comparable, BinOp, Assignable, Indexable):
+class Name(ast.Name, Comparable, BinOp, Assignable, Indexable, Callable):
     def __init__(self, id, ctx, lineno=0, col_offset=0):
         super().__init__(id=id, ctx=ctx, lineno=lineno, col_offset=col_offset)
 
@@ -118,6 +130,17 @@ class Name(ast.Name, Comparable, BinOp, Assignable, Indexable):
             lineno=self.lineno,
             col_offset=self.col_offset
         )
+
+    def __call__(self, *args, **kwargs):
+        return ast.Call(
+            func=self,
+            args=list(map(to_node, args)),
+            keywords=[
+                ast.keyword(arg=key, value=value)
+                for key, value in kwargs.items()
+            ]
+        )
+        return ast.Call()
 
 
 class Tuple(ast.Tuple, Comparable, BinOp, Assignable, Indexable):
@@ -258,10 +281,9 @@ class Call:
         )
 
 
-call = Call()
-
-
-class Attribute(ast.Attribute, Assignable, Indexable, Comparable, BinOp):
+class Attribute(
+    ast.Attribute, Assignable, Indexable, Comparable, BinOp, Callable
+):
 
     def __init__(self, value, attr, ctx, lineno=0, col_offset=0):
         super().__init__(
@@ -273,9 +295,6 @@ class Attribute(ast.Attribute, Assignable, Indexable, Comparable, BinOp):
 
     def __getattr__(self, name):
         return type(self)(value=self, attr=name, ctx=ast.Load())
-
-    def __call__(self, *args, **kwargs):
-        return call(self, *args, **kwargs)
 
 
 class Else(StatementWithBody):
