@@ -147,12 +147,27 @@ class Raise:
 raise_ = Raise()
 
 
-class SpecialArg(collections.Mapping, ast.arg):
+class SpecialArg(ast.arg):
+    """Turns out you can spoof *args by defining ``__iter__``, and **kwargs by
+    defining a ``keys()`` method + ``__getitem__``.
+
+    One wrinkle is that the ``__iter__`` implementation needs to yield a
+    ``str`` subclass
+    """
     def __init__(self, arg, annotation=None):
         super().__init__(arg=arg, annotation=annotation)
 
     def __hash__(self):
         return hash((type(self), self.arg, self.annotation))
+
+    def __eq__(self, other):
+        return self.arg == other.arg and self.annotation == other.annotation
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def keys(self):
+        return collections.KeysView(self)
 
     def __iter__(self):
         yield Args(self.arg)
@@ -160,7 +175,6 @@ class SpecialArg(collections.Mapping, ast.arg):
     def __getitem__(self, key):
         if isinstance(key, Args):
             return Kwargs(key)
-
         raise TypeError(
             '__getitem__ not defined for class {}'.format(type(self).__name__)
         )

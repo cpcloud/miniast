@@ -176,7 +176,8 @@ class SourceVisitor(ast.NodeVisitor):
         decorator_list = '\n'.join(map(self.visit, node.decorator_list))
         decorators = '@{}\n'.format(decorator_list) if decorator_list else ''
         xargs = node.args
-        allargs = itertools.chain(xargs.args, [xargs.vararg, xargs.kwarg])
+        allargs = itertools.chain(
+            xargs.args, filter(None, [xargs.vararg, xargs.kwarg]))
         args = ', '.join(map(self.visit, allargs))
         body = textwrap.indent(
             '\n'.join(map(self.visit, node.body)),
