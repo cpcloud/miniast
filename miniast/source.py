@@ -24,6 +24,42 @@ class SourceVisitor(ast.NodeVisitor):
             self.visit(node.body)
         )
 
+    def visit_ExceptHandler(self, node):
+        type = node.type
+        name = node.name
+        body = indent('\n'.join(map(self.visit, node.body)))
+        if type is None:
+            assert name is None, 'type is None but got name'
+            return 'except:\n{}'.format(body)
+
+        spec = 'except {}'.format(self.visit(type))
+        if name is not None:
+            spec += ' as {}'.format(name)
+        return '{}:\n{}'.format(spec, body)
+
+    def visit_TryWithFinally(self, node):
+        # TODO: can we remove the assemble method?
+        return self.visit(node.assemble())
+
+    visit_TryWithElse = visit_TryWithExcept = visit_TryWithFinally
+
+    def visit_Try(self, node):
+        lines = [
+            'try:',
+            indent('\n'.join(map(self.visit, node.body)))
+        ] + list(map(self.visit, node.handlers))
+
+        orelse = node.orelse  # else: clause
+        if orelse:
+            lines.append('else:')
+            lines.append(indent('\n'.join(map(self.visit, orelse))))
+
+        finalbody = node.finalbody  # finally: clause
+        if finalbody:
+            lines.append('finally:')
+            lines.append(indent('\n'.join(map(self.visit, finalbody))))
+        return '\n'.join(lines)
+
     def visit_List(self, node):
         return '[{}]'.format(', '.join(map(self.visit, node.elts)))
 

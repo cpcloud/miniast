@@ -10,7 +10,6 @@ from miniast import (
     def_,
     FALSE,
     for_,
-    idx,
     if_,
     from_,
     lambda_,
@@ -19,7 +18,6 @@ from miniast import (
     NONE,
     pass_,
     return_,
-    sub,
     TRUE,
     var,
     while_,
@@ -28,6 +26,7 @@ from miniast import (
     yield_from,
     Tuple,
     to_node,
+    try_,
 )
 
 from miniast import sourcify
@@ -67,7 +66,7 @@ def test_eq():
     )
 
 
-def test_load():
+def test_var():
     assert eq(var.foo, ast.Name(id='foo', ctx=ast.Load()))
     assert eq(var['bar'], ast.Name(id='bar', ctx=ast.Load()))
 
@@ -119,14 +118,9 @@ def test_attr():
 
 
 @pytest.mark.parametrize('i', range(5))
-def test_idx(i):
-    assert eq(idx(i), ast.Index(value=ast.Num(n=i)))
-
-
-@pytest.mark.parametrize('i', range(5))
 def test_sub(i):
     assert eq(
-        sub(var.a, idx(i)),
+        var.a[i],
         ast.Subscript(
             value=ast.Name(id='a', ctx=ast.Load()),
             slice=ast.Index(value=ast.Num(n=i)),
@@ -329,3 +323,102 @@ def n(value):
 def test_to_node(value, expected):
     result = to_node(value)
     assert eq(expected, result)
+
+
+def test_try_finally():
+    stmt = try_(
+        var.print(2)
+    ).finally_(
+        var.print(1)
+    )
+    result = sourcify(stmt)
+    expected = """\
+try:
+    print(2)
+finally:
+    print(1)"""
+    assert result == expected
+
+
+def test_try_except():
+    stmt = try_(
+        var.print(2)
+    ).except_(var.TypeError)[
+        var.print(1)
+    ]
+    result = sourcify(stmt)
+    expected = """\
+try:
+    print(2)
+except TypeError:
+    print(1)"""
+    assert result == expected
+
+
+def test_try_except_multiple():
+    stmt = try_(
+        var.print(2)
+    ).except_(var.TypeError)[
+        var.print(3)
+    ].except_(var.ValueError)[
+        var.print(1)
+    ]
+    result = sourcify(stmt)
+    expected = """\
+try:
+    print(2)
+except TypeError:
+    print(3)
+except ValueError:
+    print(1)"""
+    assert result == expected
+
+
+def test_try_except_finally():
+    stmt = try_(
+        var.x.store(1)
+    ).except_(var.TypeError)[
+        var.y.store(2)
+    ].finally_(
+        return_(3)
+    )
+    result = sourcify(stmt)
+    expected = """\
+try:
+    x = 1
+except TypeError:
+    y = 2
+finally:
+    return 3"""
+    assert result == expected
+
+
+def test_try_except_else_finally():
+    stmt = try_(
+        var.x.store(1)
+    ).except_(var.TypeError)[
+        var.y.store(2)
+    ].except_(var.ValueError)[
+        var.y.store(3)
+    ].except_(var.OSError, var.RuntimeError, as_='foo')[
+        pass_,
+    ].else_(
+        var.x.iadd(1)
+    ).finally_(
+        var.print(1, 2, 3)
+    )
+    expected = """\
+try:
+    x = 1
+except TypeError:
+    y = 2
+except ValueError:
+    y = 3
+except (OSError, RuntimeError) as foo:
+    pass
+else:
+    x += 1
+finally:
+    print(1, 2, 3)"""
+    result = sourcify(stmt)
+    assert result == expected

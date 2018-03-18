@@ -1,5 +1,4 @@
-"""
-Constructing Python ASTs in Python is quite verbose, let's clean it up a bit.
+"""Lightweight macros for Python.
 """
 
 import ast
@@ -9,6 +8,9 @@ import functools
 
 
 class StatementWithBody:
+    """Implement the square bracket syntax for Class, Def, If, While, Try, and
+    For statements.
+    """
     __slots__ = ()
 
     def __getitem__(self, *body):
@@ -22,6 +24,17 @@ SWAPPED_ARGUMENT_METHODS = {
 
 
 def binary_operations(mapping, func):
+    """Decorator providing default implementations of binary operations.
+
+    Parameters
+    ----------
+    mapping : collections.Mapping
+    func : callable
+
+    Returns
+    -------
+    decorator : callable
+    """
     def decorator(cls):
         for method_name, op in mapping.items():
             if method_name in SWAPPED_ARGUMENT_METHODS:
@@ -52,6 +65,9 @@ def binary_operations(mapping, func):
     )
 )
 class Comparable:
+    """Mixin to implement comparison operators.
+    """
+    __slots__ = ()
 
     def __contains__(self, other):
         return ast.Compare(
@@ -93,10 +109,13 @@ class Comparable:
     )
 )
 class BinOp:
-    pass
+    """Mixin to implement non-comparison binary operators.
+    """
 
 
 class Callable:
+    """Mixin to generate Call nodes.
+    """
     def __call__(self, *args, **kwargs):
         return ast.Call(
             func=self,
@@ -109,10 +128,22 @@ class Callable:
 
 
 def s(value):
+    """Convenience function to generate an ast.Str node.
+
+    Parameters
+    ----------
+    value : str
+
+    Returns
+    -------
+    node : ast.Str
+    """
     return ast.Str(s=value)
 
 
 class Assignable:
+    """Mixin to generate Assign nodes.
+    """
     def store(self, value):
         fields = {field: getattr(self, field) for field in self._fields}
         fields['ctx'] = ast.Store()
@@ -120,11 +151,19 @@ class Assignable:
 
 
 class Indexable:
+    """Mixin to generate Subscript nodes.
+    """
     def __getitem__(self, key):
-        return sub(self, idx(key))
+        return Subscript(
+            value=self,
+            slice=ast.Index(value=to_node(key)),
+            ctx=ast.Load()
+        )
 
 
 class Attributable:
+    """Mixin to generate Attribute nodes.
+    """
     def __getattr__(self, name):
         return Attribute(value=self, attr=name, ctx=ast.Load())
 
@@ -138,22 +177,32 @@ class Name(
     Callable,
     Attributable
 ):
+    """Represent a Python variable
+    """
     def __init__(self, id, ctx, lineno=0, col_offset=0):
         super().__init__(id=id, ctx=ctx, lineno=lineno, col_offset=col_offset)
 
 
 class Tuple(ast.Tuple, Comparable, BinOp, Assignable, Indexable):
+    """Represent a Python tuple.
+    """
     def __init__(self, elts, ctx, lineno=0, col_offset=0):
         super().__init__(
             elts=elts, ctx=ctx, lineno=lineno, col_offset=col_offset)
 
 
 class Var:
+    """Generate variable names.
+    """
     __slots__ = ()
 
     def __getitem__(self, key):
         if isinstance(key, tuple):
-            return Tuple(elts=list(map(to_node, key)), ctx=ast.Load())
+            targets = [
+                var[target] if isinstance(target, str) else to_node(target)
+                for target in key
+            ]
+            return Tuple(elts=targets, ctx=ast.Load())
         return Name(id=key, ctx=ast.Load())
 
     __getattr__ = __getitem__
@@ -442,16 +491,6 @@ def mod(*lines):
     return module
 
 
-class Index:
-    __slots__ = ()
-
-    def __call__(self, index):
-        return ast.Index(value=to_node(index))
-
-
-idx = Index()
-
-
 class Subscript(
     ast.Subscript,
     Comparable,
@@ -461,18 +500,14 @@ class Subscript(
     Callable,
     Attributable
 ):
-    def __init__(self, value, slice, ctx=None, lineno=0, col_offset=0):
+    def __init__(self, value, slice, ctx, lineno=0, col_offset=0):
         super().__init__(
             value=value,
             slice=slice,
-            ctx=ctx or ast.Load(),
+            ctx=ctx,
             lineno=lineno,
             col_offset=col_offset,
         )
-
-
-def sub(value, index):
-    return Subscript(value=value, slice=index, ctx=ast.Load())
 
 
 TRUE = ast.NameConstant(value=True)
@@ -649,3 +684,102 @@ def yield_(value):
 
 def yield_from(value):
     return ast.YieldFrom(value=value)
+
+
+class Except:
+    def except_(self, *type, as_=None):
+        if len(type) == 1:
+            type, = type
+        return TryWithExceptSetup(self, type, name=as_)
+
+
+class Finally:
+    @property
+    def finally_(self):
+        return TryWithFinallySetup(self)
+
+
+class TrySuiteSetup:
+    def assemble(self):
+        return self.parent.assemble()
+
+
+class TryWithFinally(ast.stmt):
+    def __init__(self, parent, *body):
+        self.parent = parent
+        self.body = list(body)
+
+    def assemble(self):
+        try_ = self.parent.assemble()
+        try_.finalbody = self.body
+        return try_
+
+
+class TryWithFinallySetup(StatementWithBody, TrySuiteSetup):
+    def __init__(self, parent):
+        self.parent = parent
+
+    def __call__(self, *body):
+        return TryWithFinally(self, *body)
+
+
+class TryWithElse(ast.stmt, Finally):
+    def __init__(self, parent, *body):
+        self.parent = parent
+        self.body = list(body)
+
+    def assemble(self):
+        try_ = self.parent.assemble()
+        try_.orelse = self.body
+        return try_
+
+
+class TryWithElseSetup(StatementWithBody, TrySuiteSetup):
+    def __init__(self, parent):
+        self.parent = parent
+
+    def __call__(self, *body):
+        return TryWithElse(self, *body)
+
+
+class TryWithExcept(ast.stmt, Except, Finally):
+    def __init__(self, parent, *body):
+        self.parent = parent
+        self.body = list(body)
+
+    @property
+    def else_(self):
+        return TryWithElseSetup(self)
+
+    def assemble(self):
+        try_ = self.parent.assemble()
+        handler = ast.ExceptHandler(
+            type=self.parent.type, name=self.parent.name, body=self.body)
+        try_.handlers.append(handler)
+        return try_
+
+
+class TryWithExceptSetup(StatementWithBody, TrySuiteSetup):
+    def __init__(self, parent, typ, name):
+        self.parent = parent
+        self.type = to_node(typ)
+        self.name = name
+
+    def __call__(self, *body):
+        return TryWithExcept(self, *body)
+
+
+class Try(ast.stmt, Except, Finally):
+    def __init__(self, *body):
+        self.body = list(body)
+
+    def assemble(self):
+        return ast.Try(body=self.body, handlers=[], orelse=[], finalbody=[])
+
+
+class TrySetup(StatementWithBody):
+    def __call__(self, *body):
+        return Try(*body)
+
+
+try_ = TrySetup()
