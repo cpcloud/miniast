@@ -560,7 +560,7 @@ class DottedModule:
         self.name = name
 
     def import_(self, *aliases, **kwargs):
-        names = [*aliases]
+        names = list(aliases)
         names += [
             ast.alias(name=a.name, asname=asname)
             for asname, a in kwargs.items()
