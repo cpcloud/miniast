@@ -445,3 +445,43 @@ finally:
     print(1, 2, 3)"""
     result = sourcify(stmt)
     assert result == expected
+
+
+def test_init_attribute():
+    init = def_.__init__(arg.self)[
+        pass_
+    ]
+    result = sourcify(init)
+    assert result == """
+def __init__(self):
+    pass"""
+
+
+def test_vararg_printing():
+    func = def_.my_func(arg.a, *arg.xargs, arg.b, **arg.foobargs)[
+        pass_
+    ]
+    result = sourcify(func)
+    assert result == """
+def my_func(a, *xargs, b, **foobargs):
+    pass"""
+
+
+def test_kwonly_printing():
+    func = def_.my_func(arg.a, ..., arg.b, **arg.foobargs)[
+        pass_
+    ]
+    result = sourcify(func)
+    assert result == """
+def my_func(a, *, b, **foobargs):
+    pass"""
+
+
+def test_kwonly_with_defaults():
+    func = def_.my_func(arg.w, arg.x, ..., arg.b @ 2, arg.c, **arg.kwargs)[
+        pass_
+    ]
+    result = sourcify(func)
+    assert result == """
+def my_func(w, x, *, b=2, c, **kwargs):
+    pass"""

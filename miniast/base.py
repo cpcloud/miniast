@@ -230,14 +230,19 @@ class SpecialArg(ast.arg):
     One wrinkle is that the ``__iter__`` implementation needs to yield a
     ``str`` subclass
     """
-    def __init__(self, arg, annotation=None):
+    def __init__(self, arg, annotation=None, default=None):
         super().__init__(arg=arg, annotation=annotation)
+        self.default = default
 
     def __hash__(self):
-        return hash((type(self), self.arg, self.annotation))
+        return hash((type(self), self.arg, self.annotation, self.default))
 
     def __eq__(self, other):
-        return self.arg == other.arg and self.annotation == other.annotation
+        return (
+            self.arg == other.arg and
+            self.annotation == other.annotation and
+            self.default == other.default
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -254,6 +259,11 @@ class SpecialArg(ast.arg):
         raise TypeError(
             '__getitem__ not defined for class {}'.format(type(self).__name__)
         )
+
+    def __matmul__(self, other):
+        constructor = type(self)
+        return constructor(
+            arg=self.arg, annotation=self.annotation, default=other)
 
 
 class Args(str):
@@ -463,20 +473,48 @@ class FunctionDef:
         self.name = name
 
     def __call__(self, *arguments, **kwargs):
-        varargs = [a for a in arguments if isinstance(a, Args)]
-        kwargs = list(kwargs.values())
-        arguments = [a for a in arguments if not isinstance(a, (Args, dict))]
-        return FunctionSignature(
+        import pdb; pdb.set_trace()  # noqa
+        args = []
+        vararg = None
+        kwonlyargs = []
+        kw_defaults = []
+        try:
+            kwarg, = list(kwargs.values())
+        except ValueError:
+            kwarg = None
+        defaults = []
+        seen_ellipsis = False
+        for i, argument in enumerate(arguments):
+            assert not isinstance(argument, dict)
+            if isinstance(argument, Args):
+                vararg = argument
+                continue
+
+            if not seen_ellipsis and argument is Ellipsis:
+                seen_ellipsis = True
+                args.append(argument)
+                continue
+
+            if vararg is not None or seen_ellipsis:
+                # everything after *args must be a required keyword argument or
+                # **kwargs
+                kwonlyargs.append(argument)
+                kw_defaults.append(to_node(argument.default))
+            else:
+                args.append(argument)
+
+        result = FunctionSignature(
             self.name,
             ast.arguments(
-                args=list(arguments),
-                vararg=varargs[0] if varargs else None,
-                kwonlyargs=[],
-                kw_defaults=[],
-                kwarg=kwargs[0] if kwargs else None,
-                defaults=[],
+                args=args,
+                vararg=vararg,
+                kwonlyargs=kwonlyargs,
+                kw_defaults=kw_defaults,
+                kwarg=kwarg,
+                defaults=defaults,
             )
         )
+        return result
 
 
 def decorate(*functions):

@@ -228,10 +228,26 @@ class SourceVisitor(ast.NodeVisitor):
     def visit_FunctionDef(self, node):
         decorator_list = '\n'.join(map(self.visit, node.decorator_list))
         decorators = '@{}\n'.format(decorator_list) if decorator_list else ''
+
+        # regular args -> varargs -> kwonlyargs -> kwargs
         xargs = node.args
         allargs = itertools.chain(
-            xargs.args, filter(None, [xargs.vararg, xargs.kwarg]))
-        args = ', '.join(map(self.visit, allargs))
+            map(self.visit, xargs.args),
+            map(self.visit, filter(None, [xargs.vararg])),
+            (
+                '='.join(
+                    filter(
+                        None,
+                        [
+                            self.visit(arg),
+                            self.visit(default) if default is not None else repr(default)
+                        ]
+                    )
+                ) for arg, default in zip(xargs.kwonlyargs, xargs.kw_defaults)
+            ),
+            map(self.visit, filter(None, [xargs.kwarg]))
+        )
+        args = ', '.join(allargs)
         body = indent('\n'.join(map(self.visit, node.body)))
         return '\n{}def {}({}):\n{}'.format(decorators, node.name, args, body)
 
@@ -253,6 +269,9 @@ class SourceVisitor(ast.NodeVisitor):
                     for kw in node.keywords)
             ))
             return '{}({})'.format(self.visit(node.func), args)
+
+    def visit_ellipsis(self, node):
+        return '*'
 
     def visit_NameConstant(self, node):
         return node.value
