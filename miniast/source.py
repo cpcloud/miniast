@@ -326,6 +326,12 @@ class SourceVisitor(ast.NodeVisitor):
         body = indent('\n'.join(map(self.visit, node.body)))
         return 'for {} in {}:\n{}'.format(target, iter, body)
 
+    def visit_Import(self, node):
+        return 'import {}'.format(', '.join(map(self.visit, node.names)))
+
+    def visit_Alias(self, node):
+        return ' as '.join(filter(None, (node.name, node.asname)))
+
 
 def sourcify(mod):
     return SourceVisitor().visit(mod)

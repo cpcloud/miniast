@@ -29,6 +29,8 @@ from miniast import (
     Tuple,
     to_node,
     try_,
+    import_,
+    Alias,
 )
 
 from miniast import sourcify
@@ -134,12 +136,15 @@ def test_sub(i):
 def test_alias():
     assert eq(
         alias.foo,
-        ast.alias(name='foo', asname=None)
+        Alias(name='foo', asname=None)
     )
+    assert sourcify(alias.foo) == 'foo'
     assert eq(
-        alias['foo', 'bar'],
-        ast.alias(name='foo', asname='bar')
+        alias['foo'].as_('bar'),
+        Alias(name='foo', asname='bar')
     )
+
+    assert sourcify(alias['foo'].as_('bar')) == 'foo as bar'
 
 
 def test_import_from():
@@ -148,12 +153,28 @@ def test_import_from():
         ast.ImportFrom(
             module='bar',
             names=[
-                ast.alias(name='foo', asname=None),
-                ast.alias(name='foo', asname='baz')
+                Alias(name='foo', asname=None),
+                Alias(name='foo', asname='baz')
             ],
             level=0
         )
     )
+    lhs = from_.bar.import_('*')
+    rhs = ast.ImportFrom(
+        module='bar',
+        names=[Alias(name='*', asname=None)],
+        level=0
+    )
+    assert eq(lhs, rhs)
+
+
+def test_import():
+    assert eq(
+        import_(alias.bar),
+        ast.Import(names=[Alias(name='bar', asname=None)])
+    )
+    assert eq(import_('bar'), import_(alias.bar))
+    assert sourcify(import_('bar')) == 'import bar'
 
 
 def test_constants():

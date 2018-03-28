@@ -517,7 +517,15 @@ FALSE = ast.NameConstant(value=False)
 NONE = ast.NameConstant(value=None)
 
 
-class Alias:
+class Alias(ast.alias):
+    def __init__(self, name, asname=None):
+        super().__init__(name=name, asname=asname)
+
+    def as_(self, asname):
+        return type(self)(name=self.name, asname=asname)
+
+
+class AliasGenerator:
     """Shorter version of aliases used in `from foo import bar as baz`.
 
     API
@@ -527,21 +535,13 @@ class Alias:
     __slots__ = ()
 
     def __getattribute__(self, name):
-        return ast.alias(name=name, asname=None)
+        return self[name]
 
     def __getitem__(self, key):
-        try:
-            name, asname = key
-        except ValueError:
-            raise ValueError(
-                'Only as imports are allowed with __getitem__, '
-                'key length must be 2'
-            )
-        else:
-            return ast.alias(name=name, asname=asname)
+        return Alias(name=key)
 
 
-alias = Alias()
+alias = AliasGenerator()
 
 
 class ImportFrom:
@@ -560,9 +560,9 @@ class DottedModule:
         self.name = name
 
     def import_(self, *aliases, **kwargs):
-        names = list(aliases)
+        names = list(map(to_alias, aliases))
         names += [
-            ast.alias(name=a.name, asname=asname)
+            Alias(name=to_alias(a).name, asname=asname)
             for asname, a in kwargs.items()
         ]
         return ast.ImportFrom(module=self.name, names=names, level=0)
@@ -571,15 +571,39 @@ class DottedModule:
         return DottedModule('{}.{}'.format(self.name, name))
 
 
+def to_alias(value):
+    """Convert `value` to an alias if it is not one already.
+
+    Parameters
+    ----------
+    value : Union[str, ast.Alias]
+
+    Returns
+    -------
+    alias : ast.Alias
+
+    Examples
+    --------
+    >>> x = to_alias('x')
+    >>> x  # doctest: +ELLIPSIS
+    <ast.alias at 0x...>
+    >>> y = to_alias(alias.y)
+    >>> y  # doctest: +ELLIPSIS
+    <ast.alias at 0x...>
+    """
+    if not isinstance(value, ast.alias):
+        return alias[value]
+    return value
+
+
 class Import:
     __slots__ = ()
 
+    def __call__(self, *args):
+        return ast.Import(names=list(map(to_alias, args)))
+
     def __getitem__(self, key):
-        if isinstance(key, tuple):
-            names = [alias[k] for k in key]
-        else:
-            names = [alias[key]]
-        return ast.Import(names=names)
+        return self(*key) if isinstance(key, tuple) else self(key)
 
     __getattr__ = __getitem__
 
